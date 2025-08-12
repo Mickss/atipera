@@ -28,7 +28,7 @@ public class GitHubController {
     }
 
     @GetMapping("/repos")
-    public ResponseEntity<?> getRepositories(@RequestParam String username) throws JsonProcessingException {
+    public ResponseEntity<List<JsonNode>> getRepositories(@RequestParam String username) throws JsonProcessingException {
         String url = "https://api.github.com/users/%s/repos".formatted(username);
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
 
@@ -66,7 +66,7 @@ public class GitHubController {
     }
 
     @ExceptionHandler(HttpClientErrorException.class)
-    public ResponseEntity<?> handleHttpClientErrorException(HttpClientErrorException ex) {
+    public ResponseEntity<Map<String, String>> handleHttpClientErrorException(HttpClientErrorException ex) {
         Map<String, String> errorDetails = new HashMap<>();
         errorDetails.put("status", String.valueOf(ex.getStatusCode().value()));
         errorDetails.put("message", ex.getMessage());
