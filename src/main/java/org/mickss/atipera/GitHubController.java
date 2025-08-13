@@ -3,7 +3,8 @@ package org.mickss.atipera;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.mickss.atipera.dto.BranchDTO;
+import org.mickss.atipera.dto.RepositoryDTO;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpClientErrorException;
@@ -28,20 +29,19 @@ public class GitHubController {
     }
 
     @GetMapping("/repos")
-    public ResponseEntity<List<JsonNode>> getRepositories(@RequestParam String username) throws JsonProcessingException {
+    public List<RepositoryDTO> getRepositories(@RequestParam String username) throws JsonProcessingException {
         String url = "https://api.github.com/users/%s/repos".formatted(username);
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
 
         JsonNode reposRoot = objectMapper.readTree(response.getBody());
 
-        List<JsonNode> repos = stream(reposRoot.spliterator(), false)
+        return stream(reposRoot.spliterator(), false)
                 .filter(repoNode -> !repoNode.get("fork").asBoolean())
-                .map(this::mapJsonNode)
+                .map(this::mapToRepositoryDTO)
                 .toList();
-        return ResponseEntity.ok(repos);
     }
 
-    private JsonNode mapJsonNode(JsonNode repoNode) {
+    private RepositoryDTO mapToRepositoryDTO(JsonNode repoNode) {
         String repoName = repoNode.get("name").asText();
         String login = repoNode.get("owner").get("login").asText();
         String branchesUrl = "https://api.github.com/repos/%s/%s/branches".formatted(login, repoName);
@@ -53,16 +53,15 @@ public class GitHubController {
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
-        List<ObjectNode> branches = stream(branchesRoot.spliterator(), false)
-                .map(branchNode -> objectMapper.createObjectNode()
-                        .put("name", branchNode.get("name").asText())
-                        .put("lastCommitSha", branchNode.get("commit").get("sha").asText()))
+
+        List<BranchDTO> branches = stream(branchesRoot.spliterator(), false)
+                .map(branchNode -> new BranchDTO(
+                        branchNode.get("name").asText(),
+                        branchNode.get("commit").get("sha").asText()
+                ))
                 .toList();
 
-        return objectMapper.createObjectNode()
-                .put("repoName", repoName)
-                .put("ownerLogin", login)
-                .set("branches", objectMapper.valueToTree(branches));
+        return new RepositoryDTO(repoName, login, branches);
     }
 
     @ExceptionHandler(HttpClientErrorException.class)
