@@ -29,17 +29,16 @@ public class GitHubController {
     }
 
     @GetMapping("/repos")
-    public ResponseEntity<List<RepositoryDTO>> getRepositories(@RequestParam String username) throws JsonProcessingException {
+    public List<RepositoryDTO> getRepositories(@RequestParam String username) throws JsonProcessingException {
         String url = "https://api.github.com/users/%s/repos".formatted(username);
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
 
         JsonNode reposRoot = objectMapper.readTree(response.getBody());
 
-        List<RepositoryDTO> repos = stream(reposRoot.spliterator(), false)
+        return stream(reposRoot.spliterator(), false)
                 .filter(repoNode -> !repoNode.get("fork").asBoolean())
                 .map(this::mapToRepositoryDTO)
                 .toList();
-        return ResponseEntity.ok(repos);
     }
 
     private RepositoryDTO mapToRepositoryDTO(JsonNode repoNode) {
