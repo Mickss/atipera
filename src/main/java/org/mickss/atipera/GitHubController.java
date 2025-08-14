@@ -1,74 +1,64 @@
 package org.mickss.atipera;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.mickss.atipera.dto.BranchDTO;
 import org.mickss.atipera.dto.RepositoryDTO;
-import org.springframework.http.ResponseEntity;
+import org.mickss.atipera.github.GitHubBranchResponse;
+import org.mickss.atipera.github.GitHubRepoResponse;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static java.util.stream.StreamSupport.stream;
 
 @RestController
 @RequestMapping("/api/github")
 public class GitHubController {
 
-    private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
+    private final RestClient restClient;
 
-    public GitHubController(RestTemplate restTemplate, ObjectMapper objectMapper) {
-        this.restTemplate = restTemplate;
-        this.objectMapper = objectMapper;
+    public GitHubController(RestClient restClient) {
+        this.restClient = restClient;
     }
 
     @GetMapping("/repos")
-    public List<RepositoryDTO> getRepositories(@RequestParam String username) throws JsonProcessingException {
+    public List<RepositoryDTO> getRepositories(@RequestParam String username) {
         String url = "https://api.github.com/users/%s/repos".formatted(username);
-        ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
 
-        JsonNode reposRoot = objectMapper.readTree(response.getBody());
+        GitHubRepoResponse[] reposResponse = restClient.get()
+                .uri(url)
+                .retrieve()
+                .body(GitHubRepoResponse[].class);
 
-        return stream(reposRoot.spliterator(), false)
-                .filter(repoNode -> !repoNode.get("fork").asBoolean())
+        return Arrays.stream(reposResponse)
+                .filter(repo -> !repo.isFork())
                 .map(this::mapToRepositoryDTO)
                 .toList();
     }
 
-    private RepositoryDTO mapToRepositoryDTO(JsonNode repoNode) {
-        String repoName = repoNode.get("name").asText();
-        String login = repoNode.get("owner").get("login").asText();
-        String branchesUrl = "https://api.github.com/repos/%s/%s/branches".formatted(login, repoName);
-        ResponseEntity<String> branchesResponse = restTemplate.getForEntity(branchesUrl, String.class);
+    private RepositoryDTO mapToRepositoryDTO(GitHubRepoResponse repo) {
+        String branchesUrl = "https://api.github.com/repos/%s/%s/branches"
+                .formatted(repo.getOwner().getLogin(), repo.getName());
 
-        JsonNode branchesRoot;
-        try {
-            branchesRoot = objectMapper.readTree(branchesResponse.getBody());
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
+        GitHubBranchResponse[] branchResponses = restClient.get()
+                .uri(branchesUrl)
+                .retrieve()
+                .body(GitHubBranchResponse[].class);
 
-        List<BranchDTO> branches = stream(branchesRoot.spliterator(), false)
-                .map(branchNode -> new BranchDTO(
-                        branchNode.get("name").asText(),
-                        branchNode.get("commit").get("sha").asText()
-                ))
+        List<BranchDTO> branches = Arrays.stream(branchResponses)
+                .map(branch -> new BranchDTO(branch.getName(), branch.getCommit().getSha()))
                 .toList();
 
-        return new RepositoryDTO(repoName, login, branches);
+        return new RepositoryDTO(repo.getName(), repo.getOwner().getLogin(), branches);
     }
 
     @ExceptionHandler(HttpClientErrorException.class)
-    public ResponseEntity<Map<String, String>> handleHttpClientErrorException(HttpClientErrorException ex) {
+    public Map<String, String> handleHttpClientErrorException(HttpClientErrorException ex) {
         Map<String, String> errorDetails = new HashMap<>();
         errorDetails.put("status", String.valueOf(ex.getStatusCode().value()));
         errorDetails.put("message", ex.getMessage());
-        return new ResponseEntity<>(errorDetails, ex.getStatusCode());
+        return errorDetails;
     }
 }
