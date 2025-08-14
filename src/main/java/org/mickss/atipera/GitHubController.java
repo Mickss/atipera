@@ -13,6 +13,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static java.util.Objects.requireNonNull;
+
 @RestController
 @RequestMapping("/api/github")
 public class GitHubController {
@@ -32,7 +34,7 @@ public class GitHubController {
                 .retrieve()
                 .body(GitHubRepoResponse[].class);
 
-        return Arrays.stream(reposResponse)
+        return Arrays.stream(requireNonNull(reposResponse))
                 .filter(repo -> !repo.isFork())
                 .map(this::mapToRepositoryDTO)
                 .toList();
@@ -47,7 +49,7 @@ public class GitHubController {
                 .retrieve()
                 .body(GitHubBranchResponse[].class);
 
-        List<BranchDTO> branches = Arrays.stream(branchResponses)
+        List<BranchDTO> branches = Arrays.stream(requireNonNull(branchResponses))
                 .map(branch -> new BranchDTO(branch.getName(), branch.getCommit().getSha()))
                 .toList();
 
