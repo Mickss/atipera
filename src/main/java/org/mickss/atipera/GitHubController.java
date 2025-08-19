@@ -4,6 +4,7 @@ import org.mickss.atipera.dto.BranchDTO;
 import org.mickss.atipera.dto.RepositoryDTO;
 import org.mickss.atipera.github.GitHubBranchResponse;
 import org.mickss.atipera.github.GitHubRepoResponse;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -57,10 +58,12 @@ public class GitHubController {
     }
 
     @ExceptionHandler(HttpClientErrorException.class)
-    public Map<String, String> handleHttpClientErrorException(HttpClientErrorException ex) {
+    public ResponseEntity<Map<String, String>> handleHttpClientErrorException(HttpClientErrorException ex) {
         Map<String, String> errorDetails = new HashMap<>();
         errorDetails.put("status", String.valueOf(ex.getStatusCode().value()));
         errorDetails.put("message", ex.getMessage());
-        return errorDetails;
+        return ResponseEntity
+                .status(ex.getStatusCode())
+                .body(errorDetails);
     }
 }
